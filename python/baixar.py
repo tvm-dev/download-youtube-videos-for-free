@@ -1,30 +1,27 @@
 import os
 import subprocess
 import re
-from tqdm import tqdm
+import tkinter as tk
+from tkinter import messagebox, filedialog
+from tkinter import ttk
+from tqdm import tqdm  # Adicione esta linha para importar tqdm
 
-# Caminho da pasta onde os vídeos serão salvos
-download_dir = 'Downloaded'
+# Caminho padrão para o local de download
+download_dir = os.getcwd()  # Diretório atual como padrão
 
-# Verifica se a pasta 'Downloaded' existe, caso contrário, cria
-if not os.path.exists(download_dir):
-    os.makedirs(download_dir)
-    print("Pasta 'Downloaded' criada.")
-
+# Função para baixar vídeo
 def download_video(url, format_option):
-    # Caminho para a pasta onde o ffmpeg está instalado (mesma pasta do script)
     ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
 
     command = [
         'yt-dlp',
-        *format_option,  # Descompacta a lista de opções
-        '--ffmpeg-location', os.path.dirname(ffmpeg_path),  # Adiciona o diretório do ffmpeg
+        *format_option,
+        '--ffmpeg-location', os.path.dirname(ffmpeg_path),
         '-o',
-        os.path.join(download_dir, '%(title)s.%(ext)s'),  # Formato de saída
+        os.path.join(download_dir, '%(title)s.%(ext)s'),
         url
     ]
 
-    # Executa o comando no shell e captura a saída
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     # Exibe a barra de progresso
@@ -35,58 +32,82 @@ def download_video(url, format_option):
                 break
             if output:
                 print(output.strip())
-                # Verifica se a saída contém o progresso do download
                 match = re.search(r'Downloading video (\d+)%', output)
                 if match:
                     percent = int(match.group(1))
                     pbar.n = percent
                     pbar.refresh()  # Atualiza a barra de progresso
 
-    # Aguarda o processo terminar e captura os erros
     _, error = process.communicate()
     if process.returncode == 0:
-        print(f"\nDownload concluído com sucesso na pasta: {download_dir}")
+        messagebox.showinfo("Sucesso", f"Download concluído com sucesso na pasta: {download_dir}")
     else:
-        print(f"\nErro ao baixar vídeo: {error.strip()}")
+        messagebox.showerror("Erro", f"Erro ao baixar vídeo: {error.strip()}")
 
-def ask_for_options():
-    url = input("Digite a URL do vídeo do YouTube: ")
+# Função para iniciar o download
+def start_download():
+    url = url_entry.get()
+    if not url:
+        messagebox.showwarning("Atenção", "Por favor, insira a URL do vídeo.")
+        return
+
+    format_option = []
     
-    # Opção de Download
-    print("Deseja baixar:")
-    print("1) Vídeo")
-    print("2) Apenas Áudio")
-    choice = input("Digite 1 ou 2 (padrão é 1): ") or '1'
-
-    if choice == '1':
-        # Qualidade padrão é 720
-        print("Escolha a qualidade:")
-        print("1) 720p (padrão)")
-        print("2) 1080p")
-        print("3) Melhor qualidade")
-        quality_choice = input("Digite 1, 2 ou 3 (padrão é 1): ") or '1'
-
-        if quality_choice == '1':
-            quality = '720'
-        elif quality_choice == '2':
-            quality = '1080'
-        else:
-            quality = 'best'
-
-        # Define as opções para garantir que o arquivo de saída seja MKV
-        format_option = [
-            f'-f bestvideo[height<={quality}]+bestaudio/best',
-            '--merge-output-format', 'mkv'  # Garantir que a saída seja no formato MKV
-        ]
-        download_video(url, format_option)
-
-    elif choice == '2':
-        # Baixar apenas o áudio em mp3
-        format_option = ['-x', '--audio-format', 'mp3']  # Baixar apenas áudio em mp3
-        download_video(url, format_option)
+    if download_type.get() == "Audio":
+        format_option = ['-x', '--audio-format', 'mp3', '--postprocessor-args', '-ar 44100']
     else:
-        print("Opção inválida. Tente novamente.")
-        ask_for_options()  # Reinicia a pergunta
+        quality = resolution_combobox.get()
+        format_option = [f'-f bestvideo[height<={quality}]+bestaudio/best', '--merge-output-format', 'mp4']
 
-# Inicia o processo
-ask_for_options()
+    download_video(url, format_option)
+
+# Função para escolher o local de download
+def choose_directory():
+    global download_dir
+    download_dir = filedialog.askdirectory()
+    if download_dir:
+        directory_label.config(text=f"Local de Download: {download_dir}")
+
+# Configuração da interface gráfica
+root = tk.Tk()
+root.title("Downloader de Vídeo")
+root.geometry("500x400")
+root.configure(bg="#f0f0f0")
+
+# Label para URL
+url_label = tk.Label(root, text="Digite a URL do vídeo do YouTube:", bg="#f0f0f0")
+url_label.pack(pady=10)
+
+# Entrada para URL
+url_entry = tk.Entry(root, width=50)
+url_entry.pack(pady=10)
+
+# Opções de download
+download_type = tk.StringVar(value="Video")  # Padrão para vídeo
+video_radio = tk.Radiobutton(root, text="Vídeo", variable=download_type, value="Video", bg="#f0f0f0")
+audio_radio = tk.Radiobutton(root, text="Áudio", variable=download_type, value="Audio", bg="#f0f0f0")
+video_radio.pack(anchor=tk.W, padx=10)
+audio_radio.pack(anchor=tk.W, padx=10)
+
+# Combobox para seleção de resolução
+resolution_label = tk.Label(root, text="Selecione a Resolução do Vídeo:", bg="#f0f0f0")
+resolution_label.pack(pady=10)
+
+resolution_combobox = ttk.Combobox(root, values=["144", "240", "360", "480", "720", "1080"], state="readonly")
+resolution_combobox.set("720")  # Padrão para 720p
+resolution_combobox.pack(pady=10)
+
+# Botão para escolher o local de download
+choose_button = tk.Button(root, text="Escolher Local de Download", command=choose_directory)
+choose_button.pack(pady=10)
+
+# Label para mostrar o local de download escolhido
+directory_label = tk.Label(root, text=f"Local de Download: {os.getcwd()}", bg="#f0f0f0")
+directory_label.pack(pady=10)
+
+# Botão de Download
+download_button = tk.Button(root, text="Baixar Vídeo", command=start_download, bg="#4CAF50", fg="white")
+download_button.pack(pady=20)
+
+# Iniciar a aplicação
+root.mainloop()
