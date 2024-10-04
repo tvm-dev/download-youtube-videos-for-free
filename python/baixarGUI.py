@@ -4,7 +4,6 @@ import re
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from tkinter import ttk
-from tqdm import tqdm
 
 # Caminho padrão para o local de download
 download_dir = os.getcwd()  # Diretório atual como padrão
@@ -27,19 +26,18 @@ def download_video(url, format_option):
     # Executa o processo yt-dlp
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-    # Exibe a barra de progresso
-    with tqdm(total=100, desc='Download Progress', unit='%', bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} - {elapsed}') as pbar:
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output:
-                print(output.strip())
-                match = re.search(r'(\d+.\d+)% of', output)  # Capturando a porcentagem corretamente
-                if match:
-                    percent = float(match.group(1))
-                    pbar.n = percent
-                    pbar.refresh()  # Atualiza a barra de progresso
+    # Atualiza a barra de progresso conforme o download avança
+    while True:
+        output = process.stdout.readline()
+        if output == '' and process.poll() is not None:
+            break
+        if output:
+            print(output.strip())
+            match = re.search(r'(\d+.\d+)% of', output)  # Capturando a porcentagem corretamente
+            if match:
+                percent = float(match.group(1))
+                progress_var.set(percent)  # Atualiza o valor da barra de progresso
+                progress_bar.update()
 
     # Finaliza o processo de download
     _, error = process.communicate()
@@ -65,6 +63,10 @@ def start_download():
         quality = resolution_combobox.get()
         # Mudança no formato para MKV
         format_option = [f'-f bestvideo[height<={quality}]+bestaudio/best', '--merge-output-format', 'mkv']
+
+    # Inicializa a barra de progresso
+    progress_var.set(0)
+    progress_bar.update()
 
     download_video(url, format_option)
 
@@ -111,6 +113,11 @@ choose_button.pack(pady=10)
 # Label para mostrar o local de download escolhido
 directory_label = tk.Label(root, text=f"Local de Download: {os.getcwd()}", bg="#f0f0f0")
 directory_label.pack(pady=10)
+
+# Barra de progresso
+progress_var = tk.DoubleVar()
+progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+progress_bar.pack(pady=10, fill=tk.X, padx=20)
 
 # Botão de Download
 download_button = tk.Button(root, text="Baixar", command=start_download, bg="#4CAF50", fg="white")
